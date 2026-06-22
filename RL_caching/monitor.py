@@ -1,16 +1,20 @@
 import matplotlib.pyplot as plt
 import numpy as np
-
+import random
 class Monitor:
     
     def __init__(self, num_servers, total_files):
         self.num_servers = num_servers
         self.total_files = total_files
+        # Aqui a gente cria um dicionário que mapeia cada arquivo para um servidor aleatório
+        self.file_to_server = {i: random.randint(0, self.num_servers - 1) for i in range(self.total_files)} 
 
     def get_server(self, file_id):
-        server_size = self.total_files // self.num_servers
-        server_id = file_id // server_size
-        return min(server_id, self.num_servers - 1)
+        # server_size = self.total_files // self.num_servers
+        # server_id = file_id // server_size
+        # return min(server_id, self.num_servers - 1)
+        """ Aqui a gente pega o servidor que tem o arquivo requisitado """
+        return self.file_to_server[file_id]
     
     def jains_fairness_index(self, loads):
         sum_loads = np.sum(loads)

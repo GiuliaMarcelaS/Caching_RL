@@ -1,4 +1,5 @@
 import random
+import numpy as np
 
 class LRU:
     def __init__(self, _state, _c):
@@ -85,3 +86,36 @@ class LFU:
                 self.delete(self.state.index(f_out))
             self.insert(f, -1)
             self.counter[f] = 1
+
+class IRM:
+    """ Aqui pegamos os ultimos objetos c do cache e invertemos para ter do mais popular para o menos """
+    def __init__(self, _c, _popularities):
+        self.c = _c
+        self.state = list(np.argsort(_popularities)[-self.c:][::-1])
+
+    def policy(self, f):
+        """ O estado do cache nao muda """
+        pass
+
+class FairStatic:
+    """ Nessa classe, primeiro calcula a carga inicial de cada servidor baseado nas popularidades dos arquivos e em qual servidor cada arquivo está. Depois, seleciona os c arquivos mais populares de forma a balancear a carga entre os servidores. """
+    def __init__(self, _c, _popularities, _num_servers, _file_to_server): 
+        self.c = _c
+        self.state = []
+
+        loads = np.zeros(_num_servers)
+        for i, p in enumerate(_popularities):
+            loads[_file_to_server[i]] += p
+        
+        available_files = list(np.argsort(_popularities)[::-1])
+        """ Encontra o servidor mais carregado e adiciona o arquivo mais popular que está nesse servidor ao cache, repetindo até que o cache esteja cheio. """
+        for _ in range(self.c):
+            heaviest_server = np.argmax(loads)
+            
+            for f in available_files:
+                if _file_to_server[f] == heaviest_server and f not in self.state:
+                    self.state.append(f)
+                    loads[heaviest_server] -= _popularities[f]
+                    break
+    def policy(self, f):
+        pass
