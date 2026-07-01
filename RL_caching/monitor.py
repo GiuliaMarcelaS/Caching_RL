@@ -1,14 +1,25 @@
+import math
 import matplotlib.pyplot as plt
 import numpy as np
 import random
+
 class Monitor:
     
     def __init__(self, num_servers, total_files):
         self.num_servers = num_servers
         self.total_files = total_files
         # Aqui a gente cria um dicionário que mapeia cada arquivo para um servidor aleatório
-        self.file_to_server = {i: random.randint(0, self.num_servers - 1) for i in range(self.total_files)} 
-
+        # self.file_to_server = {i: random.randint(0, self.num_servers - 1) for i in range(self.total_files)} 
+        self.file_to_server = {}
+        top_10_percent = int(total_files * 0.10)
+        
+        for i in range(total_files):
+            if i < top_10_percent:
+                # Força todo o tráfego pesado para o Servidor 0
+                self.file_to_server[i] = 0 
+            else:
+                # O resto do lixo (arquivos pouco populares) espalha aleatoriamente
+                self.file_to_server[i] = random.randint(0, num_servers - 1)
     def get_server(self, file_id):
         # server_size = self.total_files // self.num_servers
         # server_id = file_id // server_size
