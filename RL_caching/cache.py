@@ -126,12 +126,12 @@ class FairStatic:
 
 
 class Optimal_QLRU:
-    def __init__(self, _state, _c, _beta, _sizes, _times):
+    def __init__(self, _state, _c, _beta, _sizes, file_to_server):
         self.state = _state
         self.c = _c           
         self.beta = _beta    
         self.sizes = _sizes    
-        self.times = _times   
+        self.file_to_server = file_to_server 
         
 
         self.current_occupancy = sum(self.sizes[f] for f in self.state)
@@ -154,16 +154,19 @@ class Optimal_QLRU:
         self.state.insert(pos, f)
 
 
-    def policy(self, f):
+    def policy(self, f, current_omega):
         if f in self.state:
             self.move(f, -1)
         else:
 
             s_f = self.sizes[f]
-            t_f = self.times[f]
+
+            server_id = self.file_to_server[f]
+            
+            server_load = current_omega[server_id] + 1
             
 
-            q_f = math.exp(-self.beta * (s_f / t_f))
+            q_f = math.exp(-self.beta * (s_f / server_load))
             
 
             if random.uniform(0, 1) < q_f:   
