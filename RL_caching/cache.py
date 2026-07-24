@@ -153,29 +153,54 @@ class Optimal_QLRU:
         self.state.remove(f)
         self.state.insert(pos, f)
 
+    def _calculate_jfi(self, loads):
+        """ Função auxiliar para calcular o Jain's Fairness Index """
+        sum_loads = sum(loads)
+        if sum_loads == 0:
+            return 1.0 # Sistema perfeitamente justo se não houver carga em nenhum servidor
+        
+        sum_sq_loads = sum(l**2 for l in loads)
+        num_servers = len(loads)
+        
+        return (sum_loads**2) / (num_servers * sum_sq_loads)
+
 
     def policy(self, f, current_omega):
         if f in self.state:
             self.move(f, -1)
         else:
-
             s_f = self.sizes[f]
-
             server_id = self.file_to_server[f]
             
-            server_load = current_omega[server_id] + 1
-            
+            # 1. Simula o JFI se o ficheiro NÃO for para o cache (Cache Miss total)
+            # A carga do servidor de origem aumenta com este pedido.
+            loads_sem_cache = list(current_omega) # Faz uma cópia da carga atual
+            loads_sem_cache[server_id] += 1       # Assumimos 1 requisição (ou += s_f se a carga for medida em tamanho)
+            jfi_sem = self._calculate_jfi(loads_sem_cache)
 
-            q_f = math.exp(-self.beta * (s_f / server_load))
-            
+            # 2. Simula o JFI se o ficheiro FOR para o cache
+            # A carga do servidor fica como está (o cache absorve o impacto)
+            loads_com_cache = list(current_omega) 
+            jfi_com = self._calculate_jfi(loads_com_cache)
 
+            # 3. Calcula o Delta JFI (o impacto matemático deste ficheiro na justiça global)
+            delta_jfi = jfi_com - jfi_sem
+            
+            # 4. Transforma o Delta numa probabilidade q_f
+            if delta_jfi > 0:
+                # O ficheiro AJUDA o balanceamento! 
+                # Como o delta_jfi é um número decimal muito pequeno (ex: 0.005), 
+                # multiplicamos por uma constante (ex: 100) para que a fórmula exponencial ganhe escala.
+                # A variável beta continua a controlar a sensibilidade da IA.
+                q_f = 1.0 - math.exp(-self.beta * (delta_jfi * 100))
+            else:
+                # O ficheiro PREJUDICA ou não tem impacto no balanceamento.
+                # Não o queremos no cache.
+                q_f = 0.0
+
+            # 5. Roda a roleta para decidir a admissão no cache
             if random.uniform(0, 1) < q_f:   
-                
-              
                 if s_f <= self.c:
-                    
-
                     while s_f > (self.c - self.current_occupancy):
                         self.delete(0)
-                    
                     self.insert(f, -1)

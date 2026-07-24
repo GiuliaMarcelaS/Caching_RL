@@ -8,27 +8,28 @@ class Monitor:
     def __init__(self, num_servers, total_files):
         self.num_servers = num_servers
         self.total_files = total_files
-        # self.file_to_server = {i: random.randint(0, self.num_servers - 1) for i in range(self.total_files)} 
         self.file_to_server = {}
         top_10_percent = int(total_files * 0.10)
         
+        # Simula o desbalanceamento inicial alocando os ficheiros mais populares no Servidor 0
         for i in range(total_files):
             if i < top_10_percent:
-
                 self.file_to_server[i] = 0 
             else:
                 self.file_to_server[i] = random.randint(0, num_servers - 1)
+                
     def get_server(self, file_id):
-        # server_size = self.total_files // self.num_servers
-        # server_id = file_id // server_size
-        # return min(server_id, self.num_servers - 1)
         """ Aqui a gente pega o servidor que tem o arquivo requisitado """
         return self.file_to_server[file_id]
     
     def jains_fairness_index(self, loads):
         sum_loads = np.sum(loads)
         sum_sq_loads = np.sum(loads**2)
-
+        
+        # Previne divisão por zero caso o omega esteja vazio no início
+        if sum_sq_loads == 0:
+            return 1.0
+            
         return (sum_loads**2) / (self.num_servers * sum_sq_loads)
 
 
@@ -60,12 +61,15 @@ class Monitor:
         hit_rate = hits_count / len(req)
         print("%s's Hit Rate: %.2f%%" % (algorithm, hit_rate * 100))
 
-        hit_rate = hits_count / len(req)
         jfi = self.jains_fairness_index(omega)
         print("Omega:", omega)
         print("Jain's Fairness Index: %.4f" % jfi)
 
-        angle_radians = np.arctan2(omega[1], omega[0])
+        # --- A GRANDE ALTERAÇÃO MATEMÁTICA AQUI ---
+        # Como cos^2(theta) = JFI, então o ângulo (theta) é o arco-cosseno da raiz quadrada do JFI.
+        # Esta matemática funciona não importa quantos servidores (dimensões) você tenha!
+        angle_radians = np.arccos(np.sqrt(jfi))
         angle_degrees = np.degrees(angle_radians)
 
-        print("Angle of Vector Ω: %.2f degrees" % angle_degrees)
+        print("Angle to Perfect Fairness Line: %.2f degrees" % angle_degrees)
+        print("-" * 50)
