@@ -1,24 +1,24 @@
 import math
 import random
 import numpy as np
-
+from collections import OrderedDict
+"""
+- LRU, QLRU e Optimal_QLRU guardam self.state como um OrderedDict, em vez de uma lista.
+- A complexidade caiu de O(C) para O(1)
+"""
 class LRU:
     def __init__(self, _state, _c):
-        self.state = _state
+        self.state = OrderedDict((f, True) for f in _state)
         self.c = _c
 
     def insert(self, f, pos):
-        if pos == -1:
-            self.state.append(f)
-        else:
-            self.state.insert(pos, f)
+        self.state[f] = True
         
     def delete(self, pos):
-        self.state.pop(pos)
+        self.state.popitem(last=False)
     
     def move(self, f, pos):
-        self.state.remove(f)
-        self.state.insert(pos, f)
+        self.state.move_to_end(f)
 
     def policy(self, f):
         if f in self.state:
@@ -30,22 +30,18 @@ class LRU:
 
 class QLRU:
     def __init__(self, _state, _c, _q):
-        self.state = _state
+        self.state = OrderedDict((f, True) for f in _state)
         self.c = _c
         self.q = _q
 
     def insert(self, f, pos):
-        if pos == -1:
-            self.state.append(f)
-        else:
-            self.state.insert(pos, f)
+        self.state[f] = True
         
     def delete(self, pos):
-        self.state.pop(pos)
+        self.state.popitem(last=False)
     
     def move(self, f, pos):
-        self.state.remove(f)
-        self.state.insert(pos, f)
+        self.state.move_to_end(f)
 
     def policy(self, f):
         if f in self.state:
@@ -127,7 +123,7 @@ class FairStatic:
 
 class Optimal_QLRU:
     def __init__(self, _state, _c, _beta, _sizes, file_to_server):
-        self.state = _state
+        self.state = OrderedDict((f, True) for f in _state)
         self.c = _c           
         self.beta = _beta    
         self.sizes = _sizes    
@@ -137,30 +133,25 @@ class Optimal_QLRU:
         self.current_occupancy = sum(self.sizes[f] for f in self.state)
 
     def insert(self, f, pos):
-        if pos == -1:
-            self.state.append(f)
-        else:
-            self.state.insert(pos, f)
-
+        self.state[f] = True
         self.current_occupancy += self.sizes[f]
         
     def delete(self, pos):
-        f_removido = self.state.pop(pos)
-
-        self.current_occupancy -= self.sizes[f_removido]
+        f_removido = self.state.popitem(last=False)
+        self.current_occupancy -= self.sizes[f_removido[0]]
     
     def move(self, f, pos):
-        self.state.remove(f)
-        self.state.insert(pos, f)
+        self.state.move_to_end(f)
 
     def _calculate_jfi(self, loads):
         """ Função auxiliar para calcular o Jain's Fairness Index """
+        loads = np.asarray(loads, dtype=np.float64)
         sum_loads = sum(loads)
         if sum_loads == 0:
             return 1.0 # Sistema perfeitamente justo se não houver carga em nenhum servidor
         
-        sum_sq_loads = sum(l**2 for l in loads)
-        num_servers = len(loads)
+        sum_sq_loads = np.square(loads).sum()
+        num_servers = loads.shape[0]
         
         return (sum_loads**2) / (num_servers * sum_sq_loads)
 
@@ -174,7 +165,7 @@ class Optimal_QLRU:
             
             # 1. Simula o JFI se o ficheiro NÃO for para o cache (Cache Miss total)
             # A carga do servidor de origem aumenta com este pedido.
-            loads_sem_cache = list(current_omega) # Faz uma cópia da carga atual
+            loads_sem_cache = np.array(current_omega, dtype=np.float64) # Faz uma cópia da carga atual
             loads_sem_cache[server_id] += 1       # Assumimos 1 requisição (ou += s_f se a carga for medida em tamanho)
             jfi_sem = self._calculate_jfi(loads_sem_cache)
 
