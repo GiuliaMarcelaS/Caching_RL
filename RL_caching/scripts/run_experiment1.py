@@ -14,8 +14,8 @@ NUM_SERVIDORES = [2, 10, 20, 100, 200, 1000]
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--catalog-size", type=int, default=400)
-    parser.add_argument("--num-requests", type=int, default=10_000)
+    parser.add_argument("--catalog-size", type=int, default=100000)
+    parser.add_argument("--num-requests", type=int, default=1000000)
     parser.add_argument("--num-runs", type=int, default=30)
     parser.add_argument("--capacity", type=int, default=None,
                          help="default = 1%% do catalogo (igual ao notebook.ipynb original)")
