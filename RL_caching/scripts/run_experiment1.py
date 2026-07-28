@@ -14,21 +14,50 @@ NUM_SERVIDORES = [2, 10, 20, 100, 200, 1000]
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--catalog-size", type=int, default=100000)
+    parser.add_argument("--catalog-size", type=int, default=424)
     parser.add_argument("--num-requests", type=int, default=1000000)
-    parser.add_argument("--num-runs", type=int, default=30)
+    parser.add_argument("--num-runs", type=int, default=1)
     parser.add_argument("--capacity", type=int, default=None,
                          help="default = 1%% do catalogo (igual ao notebook.ipynb original)")
     parser.add_argument("--traffic", choices=["irm", "real", "both"], default="both")
     parser.add_argument("--real-trace-path", type=str, default="data/azure_trace_processed.parquet")
     parser.add_argument("--alpha", type=float, default=0.8, help="expoente Zipf (IRM) -- default igual ao notebook")
     parser.add_argument("--beta", type=float, default=2.3, help="beta do Optimal_QLRU -- default igual ao notebook")
+    parser.add_argument("--skew-fraction", type=float, default=0.0,
+                         help="fracao do catalogo sempre fixa no servidor 0 (ver Monitor.__init__ em "
+                              "monitor.py). Default 0.0 = distribuicao totalmente aleatoria entre os "
+                              "servidores. Use 0.10 para reproduzir o comportamento historico (hotspot "
+                              "fixo no servidor 0), por exemplo para comparar 'com hotspot' vs 'sem hotspot'.")
+    parser.add_argument("--workload-mode", choices=["uniform", "independent"], default="uniform",
+                         help="uniform (default) = todo arquivo pesa 1 na carga do servidor (popularidade "
+                              "= carga, comportamento historico). independent = custo por arquivo sorteado "
+                              "de uma log-normal desacoplada da popularidade (ver "
+                              "req_generator.independent_workload).")
+    parser.add_argument("--workload-sigma", type=float, default=1.0,
+                         help="dispersao da log-normal usada em --workload-mode independent (ignorado em "
+                              "uniform). sigma maior = pesos mais desiguais entre arquivos.")
     parser.add_argument("--workers", type=int, default=os.cpu_count() or 1)
-    parser.add_argument("--out", type=str, default="results/experiment1_scalability.csv")
+    parser.add_argument("--out", type=str, default=None,
+                         help="default = results/experiment1_scalability_<traffic>.csv (ex.: "
+                              "..._irm.csv, ..._real.csv), ou results/experiment1_scalability.csv "
+                              "se --traffic both. Assim, rodar irm e real em comandos separados nao "
+                              "sobrescreve um arquivo no outro.")
     args = parser.parse_args()
+
+    if args.out is None:
+        suffix = "" if args.traffic == "both" else f"_{args.traffic}"
+        args.out = f"results/experiment1_scalability{suffix}.csv"
 
     capacity = args.capacity if args.capacity is not None else max(1, int(args.catalog_size * 0.01))
     traffics = ["irm", "real"] if args.traffic == "both" else [args.traffic]
+
+    if "real" in traffics and not os.path.isfile(args.real_trace_path):
+        parser.error(
+            f"--real-trace-path aponta para um arquivo inexistente: {args.real_trace_path!r}. "
+            f"Rode preprocess_azure_trace.py primeiro para gera-lo, ou passe --traffic irm "
+            f"para rodar so com trafego sintetico."
+        )
+
     jobs = list(itertools.product(traffics, NUM_SERVIDORES, range(args.num_runs)))
 
     os.makedirs(os.path.dirname(args.out) or ".", exist_ok=True)
@@ -39,7 +68,8 @@ def main():
     with open(args.out, "w", newline="") as f, ProcessPoolExecutor(max_workers=args.workers) as ex:
         futures = {
             ex.submit(run_one_config, tt, ns, args.catalog_size, args.num_requests, capacity,
-                      run_id, args.alpha, args.beta, args.real_trace_path): (tt, ns, run_id)
+                      run_id, args.alpha, args.beta, args.real_trace_path, args.skew_fraction,
+                      args.workload_mode, args.workload_sigma): (tt, ns, run_id)
             for tt, ns, run_id in jobs
         }
         for fut in as_completed(futures):

@@ -14,7 +14,7 @@ CACHE_CAPACITIES = [10, 30, 100, 300, 1000, 3000, 10000, 30000]
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--num-servers", type=int, required=True,
+    parser.add_argument("--num-servers", type=int, default=2,
                          help="melhor quantidade de servidores obtida no Experimento 1")
     parser.add_argument("--catalog-size", type=int, default=100_000)
     parser.add_argument("--num-requests", type=int, default=10_000)
@@ -23,11 +23,40 @@ def main():
     parser.add_argument("--real-trace-path", type=str, default="data/azure_trace_processed.parquet")
     parser.add_argument("--alpha", type=float, default=0.8)
     parser.add_argument("--beta", type=float, default=2.3)
+    parser.add_argument("--skew-fraction", type=float, default=0.0,
+                         help="fracao do catalogo sempre fixa no servidor 0 (ver Monitor.__init__ em "
+                              "monitor.py). Default 0.0 = distribuicao totalmente aleatoria entre os "
+                              "servidores. Use 0.10 para reproduzir o comportamento historico (hotspot "
+                              "fixo no servidor 0), por exemplo para comparar 'com hotspot' vs 'sem hotspot'.")
+    parser.add_argument("--workload-mode", choices=["uniform", "independent"], default="uniform",
+                         help="uniform (default) = todo arquivo pesa 1 na carga do servidor (popularidade "
+                              "= carga, comportamento historico). independent = custo por arquivo sorteado "
+                              "de uma log-normal desacoplada da popularidade (ver "
+                              "req_generator.independent_workload).")
+    parser.add_argument("--workload-sigma", type=float, default=1.0,
+                         help="dispersao da log-normal usada em --workload-mode independent (ignorado em "
+                              "uniform). sigma maior = pesos mais desiguais entre arquivos.")
     parser.add_argument("--workers", type=int, default=os.cpu_count() or 1)
-    parser.add_argument("--out", type=str, default="results/experiment2_capacity.csv")
+    parser.add_argument("--out", type=str, default=None,
+                         help="default = results/experiment2_capacity_<traffic>.csv (ex.: ..._irm.csv, "
+                              "..._real.csv), ou results/experiment2_capacity.csv se --traffic both. "
+                              "Assim, rodar irm e real em comandos separados nao sobrescreve um "
+                              "arquivo no outro.")
     args = parser.parse_args()
 
+    if args.out is None:
+        suffix = "" if args.traffic == "both" else f"_{args.traffic}"
+        args.out = f"results/experiment2_capacity{suffix}.csv"
+
     traffics = ["irm", "real"] if args.traffic == "both" else [args.traffic]
+
+    if "real" in traffics and not os.path.isfile(args.real_trace_path):
+        parser.error(
+            f"--real-trace-path aponta para um arquivo inexistente: {args.real_trace_path!r}. "
+            f"Rode preprocess_azure_trace.py primeiro para gera-lo, ou passe --traffic irm "
+            f"para rodar so com trafego sintetico."
+        )
+
     jobs = list(itertools.product(traffics, CACHE_CAPACITIES, range(args.num_runs)))
     print(f"servidores fixos={args.num_servers} | total de execucoes: {len(jobs)} (workers={args.workers})")
 
@@ -39,7 +68,8 @@ def main():
     with open(args.out, "w", newline="") as f, ProcessPoolExecutor(max_workers=args.workers) as ex:
         futures = {
             ex.submit(run_one_config, tt, args.num_servers, args.catalog_size, args.num_requests, cap,
-                      run_id, args.alpha, args.beta, args.real_trace_path): (tt, cap, run_id)
+                      run_id, args.alpha, args.beta, args.real_trace_path, args.skew_fraction,
+                      args.workload_mode, args.workload_sigma): (tt, cap, run_id)
             for tt, cap, run_id in jobs
         }
         for fut in as_completed(futures):

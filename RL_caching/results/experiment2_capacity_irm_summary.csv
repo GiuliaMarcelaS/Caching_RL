@@ -1,0 +1,6 @@
+algorithm,num_servers,hit_rate_mean_%,hit_rate_std_%,jfi_mean,jfi_std,n_runs
+q-LRU,2,10.18,10.07,0.9995,0.0006,240
+LRU,2,16.61,11.84,0.9869,0.0133,240
+No Caching,2,0.0,0.0,0.988,0.0128,240
+OPT,2,14.81,9.44,0.9876,0.0132,240
+Q-learning,2,9.27,6.64,0.9883,0.0127,240
