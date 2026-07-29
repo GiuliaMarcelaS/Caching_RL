@@ -16,8 +16,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--num-servers", type=int, default=2,
                          help="melhor quantidade de servidores obtida no Experimento 1")
-    parser.add_argument("--catalog-size", type=int, default=100_000)
-    parser.add_argument("--num-requests", type=int, default=10_000)
+    parser.add_argument("--catalog-size", type=int, default=424)
+    parser.add_argument("--num-requests", type=int, default=1000000)
     parser.add_argument("--num-runs", type=int, default=30)
     parser.add_argument("--traffic", choices=["irm", "real", "both"], default="both")
     parser.add_argument("--real-trace-path", type=str, default="data/azure_trace_processed.parquet")
