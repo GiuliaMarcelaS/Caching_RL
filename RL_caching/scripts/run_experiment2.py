@@ -14,7 +14,7 @@ CACHE_CAPACITIES = [10, 30, 100, 300, 1000, 3000, 10000, 30000]
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--num-servers", type=int, default=2,
+    parser.add_argument("--num-servers", type=int, required=True,
                          help="melhor quantidade de servidores obtida no Experimento 1")
     parser.add_argument("--catalog-size", type=int, default=424)
     parser.add_argument("--num-requests", type=int, default=1000000)
@@ -28,6 +28,18 @@ def main():
                               "monitor.py). Default 0.0 = distribuicao totalmente aleatoria entre os "
                               "servidores. Use 0.10 para reproduzir o comportamento historico (hotspot "
                               "fixo no servidor 0), por exemplo para comparar 'com hotspot' vs 'sem hotspot'.")
+    parser.add_argument("--skew-mode", choices=["index", "exclude_top_k"], default="index",
+                         help="index (default) = bloco fixo por indice de arquivo (equivale a aleatorio, "
+                              "ja que popularidades sao embaralhadas). exclude_top_k = servidor 0 fica com "
+                              "um bloco popular o bastante pra ficar sobrecarregado, mas EXCLUINDO os "
+                              "--exclude-top-k mais populares do catalogo -- cria cenario onde cachear os "
+                              "arquivos mais populares (otimo pra hit rate) nao ajuda o servidor 0 (otimo "
+                              "pra fairness exige cachear conteudo especifico dele, que nao e o mais "
+                              "popular). So tem efeito com --skew-fraction > 0.")
+    parser.add_argument("--exclude-top-k", type=int, default=None,
+                         help="usado so com --skew-mode exclude_top_k. Quantos dos arquivos mais populares "
+                              "do catalogo ficam de fora do servidor 0. Default = capacity de cada job "
+                              "(varia, ja que este experimento varia capacity).")
     parser.add_argument("--workload-mode", choices=["uniform", "independent"], default="uniform",
                          help="uniform (default) = todo arquivo pesa 1 na carga do servidor (popularidade "
                               "= carga, comportamento historico). independent = custo por arquivo sorteado "
@@ -69,7 +81,7 @@ def main():
         futures = {
             ex.submit(run_one_config, tt, args.num_servers, args.catalog_size, args.num_requests, cap,
                       run_id, args.alpha, args.beta, args.real_trace_path, args.skew_fraction,
-                      args.workload_mode, args.workload_sigma): (tt, cap, run_id)
+                      args.skew_mode, args.exclude_top_k, args.workload_mode, args.workload_sigma): (tt, cap, run_id)
             for tt, cap, run_id in jobs
         }
         for fut in as_completed(futures):

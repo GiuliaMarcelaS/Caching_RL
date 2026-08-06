@@ -53,13 +53,16 @@ def angle_from_jfi(jfi: float) -> float:
 
 
 def run_one_config(traffic_type, num_servers, catalog_size, num_requests, capacity,
-                    run_id, alpha, beta, real_trace_path, skew_fraction=0.0,
-                    workload_mode="uniform", workload_sigma=1.0):
+                    run_id, alpha, beta, real_trace_path, skew_fraction=0.0, skew_mode="index",
+                    exclude_top_k=None, workload_mode="uniform", workload_sigma=1.0):
     """Roda Optimal_QLRU + as 4 variantes de qlearning_balancer
 
-    skew_fraction: repassado para Monitor -- fracao do catalogo sempre fixa
-        no servidor 0. Default 0.0 = distribuicao totalmente aleatoria entre
-        os servidores (sem hotspot estrutural). Veja o docstring de
+    skew_fraction / skew_mode / exclude_top_k: repassados para Monitor --
+        fracao do catalogo sempre fixa no servidor 0, como escolher quais
+        arquivos, e (em skew_mode="exclude_top_k") quantos dos mais
+        populares do catalogo ficam de fora desse bloco. Se exclude_top_k
+        for None, usa `capacity` (ou seja, exclui exatamente o que um cache
+        guloso por hit rate escolheria). Veja o docstring de
         Monitor.__init__ em monitor.py para mais detalhes.
 
     workload_mode / workload_sigma: ver build_workload() acima. Controla
@@ -69,22 +72,32 @@ def run_one_config(traffic_type, num_servers, catalog_size, num_requests, capaci
         "cerca de N itens", nos dois modos.
     """
     seed = run_id
-    rng_py = random.Random(seed)
 
     popularities = build_popularities(traffic_type, catalog_size, alpha, real_trace_path, seed)
     req = np.random.default_rng(seed).choice(catalog_size, num_requests, p=popularities)
     workload = build_workload(workload_mode, catalog_size, seed, workload_sigma)
 
-    monitor = Monitor(num_servers, catalog_size, seed=seed, skew_fraction=skew_fraction)
+    if exclude_top_k is None:
+        exclude_top_k = capacity
+    monitor = Monitor(num_servers, catalog_size, seed=seed, skew_fraction=skew_fraction,
+                       skew_mode=skew_mode, popularities=popularities, exclude_top_k=exclude_top_k)
 
     rows = []
 
     # --- Optimal_QLRU (cache.py) ---
     # sizes fica uniforme de proposito: workload aqui so pesa a carga gerada
     # no servidor (via monitor.run_metrics), nao a ocupacao do cache.
-    initial_state = rng_py.sample(range(catalog_size), min(capacity, catalog_size))
+    # Cache comeca VAZIO, igual ao qlearning_balancer -- comparacao justa.
+    # (Antes pre-populavamos com min(capacity, catalog_size) arquivos
+    # aleatorios; o efeito era desprezivel para capacity pequena, mas quando
+    # capacity >= catalog_size isso pre-carregava o catalogo INTEIRO de
+    # graca, incluindo o primeiro acesso de cada arquivo -- inflando
+    # artificialmente hit_rate/jfi do Optimal_QLRU exatamente na faixa de
+    # capacity alta que o experimento 2 varre.)
+    initial_state = []
     sizes = [1] * catalog_size
-    opt_cache = Optimal_QLRU(initial_state, capacity, beta, sizes, monitor.file_to_server)
+    opt_cache = Optimal_QLRU(initial_state, capacity, beta, sizes, monitor.file_to_server,
+                              rng=random.Random(seed))
     res_opt = monitor.run_metrics(opt_cache, req, popularities, capacity, algorithm="Optimal_QLRU",
                                    plot=False, workload=workload)
     rows.append({
@@ -111,6 +124,8 @@ def run_one_config(traffic_type, num_servers, catalog_size, num_requests, capaci
         "num_requests": num_requests,
         "run_id": run_id,
         "skew_fraction": skew_fraction,
+        "skew_mode": skew_mode,
+        "exclude_top_k": exclude_top_k,
         "workload_mode": workload_mode,
     }
     for row in rows:

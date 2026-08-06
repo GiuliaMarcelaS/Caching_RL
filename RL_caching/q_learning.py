@@ -8,6 +8,17 @@ avaliacao a parte, nao como parte do reward. Se no futuro quiser um agente que
 otimize os dois objetivos simultaneamente, e preciso somar um termo de hit
 rate ao reward abaixo (e provavelmente reponderar com um beta, como no
 Optimal_QLRU de cache.py).
+
+Nota sobre os defaults de alpha_q/gamma/eps_start/eps_end/B/eta_A: foram
+calibrados por busca aleatoria (40 configs x 5 seeds, validado depois com 15
+seeds fora da amostra) sobre o cenario padrao do projeto (catalog_size=1000,
+num_servers=50, num_requests=15000, capacity=10, skew_fraction=0). Isso
+melhorou o JFI medio de 0.557 (defaults antigos) para 0.673 (~21% de ganho),
+sem piorar hit_rate. Antes dessa calibracao, o Optimal_QLRU (cache.py) tinha
+vantagem em parte porque seu beta havia sido ajustado (herdado do notebook
+original) enquanto esses hiperparametros nunca tinham sido -- comparacao
+historicamente injusta nesse sentido especifico. Reajuste se mudar
+significativamente o cenario de uso (catalogo, capacidade, etc.).
 """
 import random
 from collections import OrderedDict
@@ -15,8 +26,16 @@ from collections import OrderedDict
 import numpy as np
 
 
-def _freq_bin(cnt: int, thr: tuple) -> int:
-    return 0 if cnt < thr[0] else (1 if cnt < thr[1] else 2)
+def _freq_bin(cnt: int, thr: tuple, B: int) -> int:
+    # _freq_bin sempre calculava um balde entre 0 e 2 (3 baldes fixos),
+    # ignorando B -- com B<3 (ex.: B=2, escolhido pela busca de
+    # hiperparametros) isso gerava um indice de estado fora dos limites
+    # (_state_index assume fb em [0, B-1]). O clamp abaixo garante um
+    # indice sempre valido, qualquer que seja B; com B<3 os baldes mais
+    # altos apenas colapsam no ultimo (perde granularidade, mas nunca
+    # quebra).
+    fb = 0 if cnt < thr[0] else (1 if cnt < thr[1] else 2)
+    return min(fb, B - 1)
 
 
 def _state_index(balance: int, on_heaviest: int, cached: int, fb: int, B: int) -> int:
@@ -24,10 +43,10 @@ def _state_index(balance: int, on_heaviest: int, cached: int, fb: int, B: int) -
 
 
 def run_qlearning(monitor, req, catalog_size: int, capacity: int, mode: str = "qlearn",
-                   workload=None, B: int = 3, freq_thr=None,
-                   alpha_q: float = 0.1, gamma: float = 0.9,
-                   eps_start: float = 0.3, eps_end: float = 0.02,
-                   balance_thr: float = 0.9, eta_A: float = 0.02,
+                   workload=None, B: int = 2, freq_thr=None,
+                   alpha_q: float = 0.20, gamma: float = 0.95,
+                   eps_start: float = 0.2, eps_end: float = 0.005,
+                   balance_thr: float = 0.9, eta_A: float = 0.01,
                    seed: int = 0, curve_points: int = 200) -> dict:
 
     rng_py = random.Random(seed)
@@ -64,7 +83,7 @@ def run_qlearning(monitor, req, catalog_size: int, capacity: int, mode: str = "q
         heaviest = int(np.argmax(A))
         on_heaviest = 1 if srv == heaviest else 0
         balance = 1 if monitor.jains_fairness_index(A) >= balance_thr else 0
-        s = _state_index(balance, on_heaviest, int(cached), _freq_bin(int(freq[f]), freq_thr), B)
+        s = _state_index(balance, on_heaviest, int(cached), _freq_bin(int(freq[f]), freq_thr, B), B)
 
         # Update de Q para a transicao (s_prev, a_prev) -> s, usando a
         # recompensa r_prev observada exatamente apos a_prev ter sido

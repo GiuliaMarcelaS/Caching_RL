@@ -122,13 +122,32 @@ class FairStatic:
 
 
 class Optimal_QLRU:
-    def __init__(self, _state, _c, _beta, _sizes, file_to_server):
+    def __init__(self, _state, _c, _beta, _sizes, file_to_server, rng=None, track_stats=False):
+        """
+        rng: instancia de random.Random usada na decisao probabilistica de
+            admissao (random.uniform(0,1) < q_f). Se None, cria uma
+            instancia SEM seed fixa (nao reprodutivel). O chamador deveria
+            sempre passar um random.Random(seed) explicito para
+            reprodutibilidade -- o modulo `random` global nao e sincronizado
+            entre processos sob multiprocessing.
+
+        track_stats: se True, guarda em self.q_history o valor de q_f
+            calculado em CADA decisao de admissao (cache miss), e em
+            self.delta_jfi_history o delta_jfi correspondente. Usado para
+            estatisticas de como "q" esta sendo atribuido (media, mediana,
+            desvio padrao) e para depuracao/analise. Custa memoria O(numero
+            de misses) quando ligado -- deixe False em rodadas grandes que
+            nao precisem dessa analise.
+        """
         self.state = OrderedDict((f, True) for f in _state)
         self.c = _c           
         self.beta = _beta    
         self.sizes = _sizes    
         self.file_to_server = file_to_server 
-        
+        self.rng = rng if rng is not None else random.Random()
+        self.track_stats = track_stats
+        self.q_history = [] if track_stats else None
+        self.delta_jfi_history = [] if track_stats else None
 
         self.current_occupancy = sum(self.sizes[f] for f in self.state)
 
@@ -189,8 +208,12 @@ class Optimal_QLRU:
                 # Não o queremos no cache.
                 q_f = 0.0
 
+            if self.track_stats:
+                self.q_history.append(q_f)
+                self.delta_jfi_history.append(delta_jfi)
+
             # 5. Roda a roleta para decidir a admissão no cache
-            if random.uniform(0, 1) < q_f:   
+            if self.rng.uniform(0, 1) < q_f:   
                 if s_f <= self.c:
                     while s_f > (self.c - self.current_occupancy):
                         self.delete(0)
