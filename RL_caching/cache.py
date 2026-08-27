@@ -132,12 +132,15 @@ class Optimal_QLRU:
             entre processos sob multiprocessing.
 
         track_stats: se True, guarda em self.q_history o valor de q_f
-            calculado em CADA decisao de admissao (cache miss), e em
-            self.delta_jfi_history o delta_jfi correspondente. Usado para
-            estatisticas de como "q" esta sendo atribuido (media, mediana,
-            desvio padrao) e para depuracao/analise. Custa memoria O(numero
-            de misses) quando ligado -- deixe False em rodadas grandes que
-            nao precisem dessa analise.
+            calculado em CADA decisao de admissao (cache miss), em
+            self.delta_jfi_history o delta_jfi correspondente, em
+            self.roll_history o numero sorteado (self.rng.uniform(0,1))
+            usado na decisao, e em self.decision_history se foi admitido
+            (True) ou nao (False). Usado para estatisticas de como "q" esta
+            sendo atribuido (media, mediana, desvio padrao) e para
+            depuracao/analise/visualizacao. Custa memoria O(numero de
+            misses) quando ligado -- deixe False em rodadas grandes que nao
+            precisem dessa analise.
         """
         self.state = OrderedDict((f, True) for f in _state)
         self.c = _c           
@@ -148,6 +151,8 @@ class Optimal_QLRU:
         self.track_stats = track_stats
         self.q_history = [] if track_stats else None
         self.delta_jfi_history = [] if track_stats else None
+        self.roll_history = [] if track_stats else None
+        self.decision_history = [] if track_stats else None
 
         self.current_occupancy = sum(self.sizes[f] for f in self.state)
 
@@ -237,7 +242,12 @@ class Optimal_QLRU:
                 self.delta_jfi_history.append(delta_jfi)
 
             # 5. Roda a roleta para decidir a admissão no cache
-            if self.rng.uniform(0, 1) < q_f:   
+            roll = self.rng.uniform(0, 1)
+            admitiu = roll < q_f
+            if self.track_stats:
+                self.roll_history.append(roll)
+                self.decision_history.append(admitiu)
+            if admitiu:
                 if s_f <= self.c:
                     while s_f > (self.c - self.current_occupancy):
                         self.delete(0)

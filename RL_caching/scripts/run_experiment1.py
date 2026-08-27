@@ -9,7 +9,7 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from _common import run_one_config
 
-NUM_SERVIDORES = [2]
+NUM_SERVIDORES = [2, 10, 20, 100, 200, 1000]
 
 
 def main():
