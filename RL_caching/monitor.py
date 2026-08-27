@@ -152,7 +152,7 @@ class Monitor:
             if plot:
                 hit_curve.append(hits_count / i)
 
-            if curve_points and (i % curve_every == 0 or i == len(req)):
+            if curve_points and (i == 1 or i % curve_every == 0 or i == len(req)):
                 jfi_curve.append((i, self.jains_fairness_index(omega)))
 
         hit_rate = hits_count / len(req) if len(req) else 0.0
