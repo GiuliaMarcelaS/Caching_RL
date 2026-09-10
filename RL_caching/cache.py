@@ -160,7 +160,7 @@ class Optimal_QLRU:
         self.state[f] = True
         self.current_occupancy += self.sizes[f]
         
-    def delete(self, pos):
+    def delete(self, pos):  
         f_removido = self.state.popitem(last=False)
         self.current_occupancy -= self.sizes[f_removido[0]]
     
